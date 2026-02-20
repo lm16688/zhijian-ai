@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智剪 · AI视频剪辑 (真实API, 延长超时)</title>
+<title>智剪 · AI视频剪辑 (真实API, 修复active状态)</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -493,7 +493,6 @@ async function startPipeline() {
     // ── STEP 2: Wait for file processing ────────────────
     setStep(2);
     log('<span class="linfo">⏳ 等待视频处理完成 (最长等待10分钟)...</span>');
-    // 修改点：将最大等待时间从120秒延长至600秒（10分钟）
     await waitForFileReady(fileId, 600000);
     log('<span class="lok">✓ 视频处理就绪</span>');
     setP(45, '视频就绪，发送至 AI 分析...');
@@ -585,9 +584,8 @@ async function uploadVideoFile(file) {
   return result.id;
 }
 
-// Poll file status until 'processed'
+// Poll file status until 'active' (ready)
 // API: GET /api/v3/files/{file_id}
-// 修改：maxWait 默认改为 600000ms (10分钟)，支持长视频处理
 async function waitForFileReady(fid, maxWait = 600000) {
   const start = Date.now();
   while (Date.now() - start < maxWait) {
@@ -597,7 +595,8 @@ async function waitForFileReady(fid, maxWait = 600000) {
     if (!r.ok) throw new Error(`查询文件状态失败 HTTP ${r.status}`);
     const data = await r.json();
     log(`<span class="linfo">  文件状态: ${data.status}</span>`);
-    if (data.status === 'processed' || data.status === 'success') return;
+    // 当状态为 'active' 表示文件已处理完成，可用于推理
+    if (data.status === 'active' || data.status === 'processed' || data.status === 'success') return;
     if (data.status === 'failed' || data.status === 'error') throw new Error('文件处理失败: ' + (data.message || data.status));
     await sleep(2000);
     setP(40 + Math.min((Date.now()-start)/1000, 10), '等待视频处理...');
@@ -988,6 +987,6 @@ function toast(msg, type='') {
   clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove('show'),4000);
 }
 </script>
-<!-- 说明：合成视频不含音频，如需音频请使用专业工具。API密钥仅存储本地。超时已延长至10分钟，以应对服务端处理延迟。 -->
+<!-- 说明：合成视频不含音频，如需音频请使用专业工具。API密钥仅存储本地。超时已延长至10分钟，并支持文件状态 'active' 作为就绪标志。 -->
 </body>
 </html>
