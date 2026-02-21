@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智剪 · AI视频剪辑 (修复active状态判断)</title>
+<title>智剪 · AI视频剪辑 (增强状态诊断)</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -584,25 +584,34 @@ async function uploadVideoFile(file) {
   return result.id;
 }
 
-// ═══════════════════════ 等待文件就绪（修复版）═══════════════════════
+// ═══════════════════════ 等待文件就绪（增强诊断版）═══════════════════════
 async function waitForFileReady(fid, maxWait = 600000) {
   const start = Date.now();
+  let attempt = 0;
   while (Date.now() - start < maxWait) {
+    attempt++;
     const r = await fetch(`https://ark.cn-beijing.volces.com/api/v3/files/${fid}`, {
       headers: { 'Authorization': `Bearer ${cfg.apiKey}` }
     });
     if (!r.ok) throw new Error(`查询文件状态失败 HTTP ${r.status}`);
     const data = await r.json();
-    log(`<span class="linfo">  文件状态: ${data.status}</span>`);
-    // 统一转为小写比较，避免大小写问题
-    const status = (data.status || '').toLowerCase();
-    if (status === 'active' || status === 'processed' || status === 'success') {
-      log('<span class="lok">  文件处理完成，状态为 ' + data.status + '</span>');
+    // 输出原始状态值及其ASCII码，用于诊断
+    const rawStatus = data.status;
+    const statusStr = String(rawStatus);
+    const ascii = Array.from(statusStr).map(c => c.charCodeAt(0)).join(' ');
+    log(`<span class="linfo">  文件状态: ${statusStr} (ASCII: ${ascii})</span>`);
+    
+    // 去除空格并转为小写后判断
+    const cleanStatus = statusStr.trim().toLowerCase();
+    if (cleanStatus.includes('active') || cleanStatus.includes('processed') || cleanStatus.includes('success')) {
+      log(`<span class="lok">  检测到就绪状态：${statusStr}，继续下一步</span>`);
       return;
     }
-    if (status === 'failed' || status === 'error') throw new Error('文件处理失败: ' + (data.message || data.status));
+    if (cleanStatus.includes('failed') || cleanStatus.includes('error')) {
+      throw new Error('文件处理失败: ' + (data.message || rawStatus));
+    }
     await sleep(2000);
-    setP(40 + Math.min((Date.now()-start)/1000, 10), '等待视频处理...');
+    setP(40 + Math.min((Date.now()-start)/1000, 10), `等待视频处理... (尝试 ${attempt})`);
   }
   throw new Error('视频处理超时（超过10分钟），请稍后重试或检查视频文件是否过大。');
 }
@@ -990,6 +999,6 @@ function toast(msg, type='') {
   clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove('show'),4000);
 }
 </script>
-<!-- 说明：合成视频不含音频，如需音频请使用专业工具。API密钥仅存储本地。超时已延长至10分钟，状态判断统一为小写，并增加就绪日志。 -->
+<!-- 说明：合成视频不含音频，如需音频请使用专业工具。API密钥仅存储本地。超时已延长至10分钟，并输出状态ASCII码以便诊断。 -->
 </body>
 </html>
