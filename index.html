@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智剪 · AI视频剪辑 (真实API, 修复active状态)</title>
+<title>智剪 · AI视频剪辑 (修复active状态判断)</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -584,8 +584,7 @@ async function uploadVideoFile(file) {
   return result.id;
 }
 
-// Poll file status until 'active' (ready)
-// API: GET /api/v3/files/{file_id}
+// ═══════════════════════ 等待文件就绪（修复版）═══════════════════════
 async function waitForFileReady(fid, maxWait = 600000) {
   const start = Date.now();
   while (Date.now() - start < maxWait) {
@@ -595,9 +594,13 @@ async function waitForFileReady(fid, maxWait = 600000) {
     if (!r.ok) throw new Error(`查询文件状态失败 HTTP ${r.status}`);
     const data = await r.json();
     log(`<span class="linfo">  文件状态: ${data.status}</span>`);
-    // 当状态为 'active' 表示文件已处理完成，可用于推理
-    if (data.status === 'active' || data.status === 'processed' || data.status === 'success') return;
-    if (data.status === 'failed' || data.status === 'error') throw new Error('文件处理失败: ' + (data.message || data.status));
+    // 统一转为小写比较，避免大小写问题
+    const status = (data.status || '').toLowerCase();
+    if (status === 'active' || status === 'processed' || status === 'success') {
+      log('<span class="lok">  文件处理完成，状态为 ' + data.status + '</span>');
+      return;
+    }
+    if (status === 'failed' || status === 'error') throw new Error('文件处理失败: ' + (data.message || data.status));
     await sleep(2000);
     setP(40 + Math.min((Date.now()-start)/1000, 10), '等待视频处理...');
   }
@@ -987,6 +990,6 @@ function toast(msg, type='') {
   clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove('show'),4000);
 }
 </script>
-<!-- 说明：合成视频不含音频，如需音频请使用专业工具。API密钥仅存储本地。超时已延长至10分钟，并支持文件状态 'active' 作为就绪标志。 -->
+<!-- 说明：合成视频不含音频，如需音频请使用专业工具。API密钥仅存储本地。超时已延长至10分钟，状态判断统一为小写，并增加就绪日志。 -->
 </body>
 </html>
